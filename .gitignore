@@ -1,0 +1,19 @@
+# Build output
+build/
+
+# CMake cache
+.cache/
+
+# Claude AI cache data
+.claude
+
+# Temp files
+temp/*
+
+# ---- STM32CubeMX (cubemx/) ----
+# Ignore generated project contents (Drivers, EWARM, cmake, linker scripts, etc.)
+# Track the .ioc file (CubeMX project configuration - source of truth)
+# Track the Core folder (C source and headers)
+cubemx/*
+!cubemx/*.ioc
+!cubemx/Core/
