@@ -38,12 +38,14 @@
  */
 
 #include "app/display.h"
+#include "app/displayed_sensor_management.h"
 
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 
 #include "cmsis_os.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -260,12 +262,17 @@ void display_task(void *argument)
      for (;;) {
          sensor_data_t data;
          osMessageQueueGet(g_sensor_queue, &data, NULL, osWaitForever);
-         // Caller is responsible for mapping room name → column index.
-         uint8_t col = 0; // a proper mapping strategy shall be defined.
-         if (!room_drawn[col]) {
-             display_draw_room(col, data.room);
-             room_drawn[col] = true;
-         }
-         display_update_sensor(col, &data);
+
+         // if sensor is referenced as 'active', then we update the display.
+         // Otherwise, incoming data is discarded.
+         const uint8_t col = displayed_sensor_update(data.room);
+         if(col!=NO_ACTIVE_INDEX_AVAILABLE)
+         {
+            if (!room_drawn[col]) {
+                display_draw_room(col, data.room);
+                room_drawn[col] = true;
+            }
+            display_update_sensor(col, &data);
+        }
      }
 }
