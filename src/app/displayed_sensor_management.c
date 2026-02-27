@@ -1,4 +1,5 @@
 #include "app/displayed_sensor_management.h"
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
@@ -9,6 +10,7 @@
 // constants
 #define ROOM_NAME_MAX_SIZE 16U
 #define NUMBER_OF_SUPPORTED_SENSORS 4
+#define SENSOR_TIMEOUT_MS 5000U
 
 // internal types
 typedef struct
@@ -16,11 +18,11 @@ typedef struct
     char room_name[ROOM_NAME_MAX_SIZE];
     uint8_t current_index;
     uint32_t last_timestamp_milliseconds;
-} active_sensor_data_t;
+    bool is_active;
+} sensor_data_t;
 
 // keep some static data which represents 'active' sensors
-static active_sensor_data_t active_sensors[NUMBER_OF_SUPPORTED_SENSORS];
-static uint8_t next_free_active_sensor_index;
+static sensor_data_t active_sensors[NUMBER_OF_SUPPORTED_SENSORS];
 
 // helpers
 static inline uint32_t current_time_stamp_ms()
@@ -29,34 +31,65 @@ static inline uint32_t current_time_stamp_ms()
     return portTICK_PERIOD_MS * now;
 }
 
+#ifdef UNIT_TEST
+void displayed_sensor_management_reset(void)
+{
+    memset(active_sensors, 0, sizeof(active_sensors));
+}
+#endif
+
 // public functions
 uint8_t displayed_sensor_update(const char* room_name)
 {
-    for(uint8_t index=0u;index<NUMBER_OF_SUPPORTED_SENSORS;index++)
+    uint8_t free_slot = NO_ACTIVE_INDEX_AVAILABLE;
+
+    for(uint8_t index = 0u; index < NUMBER_OF_SUPPORTED_SENSORS; index++)
     {
-        // find if current sensor data is matching an active sensor
-        if(strcmp(room_name,(const char*)&active_sensors[index].room_name) == 0)
+        if(active_sensors[index].is_active)
         {
-            // already refered as active sensor, then update timestamp and leave
-            active_sensors[index].last_timestamp_milliseconds = current_time_stamp_ms();
-            return index;
+            if(strcmp(room_name, active_sensors[index].room_name) == 0)
+            {
+                active_sensors[index].last_timestamp_milliseconds = current_time_stamp_ms();
+                return index;
+            }
+        }
+        else if(free_slot == NO_ACTIVE_INDEX_AVAILABLE)
+        {
+            free_slot = index;
         }
     }
 
-    // sensor is not yet refered as active
-    // if any room for a new sensor, take it, otherwise data would be dropped
-    if(next_free_active_sensor_index<NUMBER_OF_SUPPORTED_SENSORS)
+    // sensor not yet active — take the first free slot if available
+    if(free_slot == NO_ACTIVE_INDEX_AVAILABLE)
     {
-        // at least one index is free, then, take the seat
-        snprintf((char *)&active_sensors[next_free_active_sensor_index].room_name, ROOM_NAME_MAX_SIZE, "%s", room_name);
-        active_sensors[next_free_active_sensor_index].current_index = next_free_active_sensor_index;
-        active_sensors[next_free_active_sensor_index].last_timestamp_milliseconds = current_time_stamp_ms();
-        
-        return next_free_active_sensor_index;
-    }
-    else {
-        // no index free
         return NO_ACTIVE_INDEX_AVAILABLE;
     }
-        
+
+    snprintf(active_sensors[free_slot].room_name, ROOM_NAME_MAX_SIZE, "%s", room_name);
+    active_sensors[free_slot].current_index = free_slot;
+    active_sensors[free_slot].last_timestamp_milliseconds = current_time_stamp_ms();
+    active_sensors[free_slot].is_active = true;
+
+    return free_slot;
+}
+
+uint8_t displayed_sensor_evaluate_timeout(void)
+{
+    const uint32_t now = current_time_stamp_ms();
+
+    for(uint8_t i = 0u; i < NUMBER_OF_SUPPORTED_SENSORS; i++)
+    {
+        if(!active_sensors[i].is_active)
+        {
+            continue;
+        }
+
+        if((now - active_sensors[i].last_timestamp_milliseconds) >= SENSOR_TIMEOUT_MS)
+        {
+            active_sensors[i].is_active = false;
+            return i;
+        }
+    }
+
+    return NO_TIMEOUT;
 }

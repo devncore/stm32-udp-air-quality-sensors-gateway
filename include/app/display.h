@@ -81,6 +81,20 @@ void display_draw_room(uint8_t col, const char *name);
 void display_update_sensor(uint8_t col, const sensor_data_t *data);
 
 /**
+ * @brief Erase all displayed data for one sensor column.
+ *
+ * Clears the room name and all dynamic fields (temperature, humidity,
+ * air quality) by filling the relevant pixel rectangles with black.
+ * A single ssd1306_UpdateScreen() call is issued at the end.
+ *
+ * Intended to be called when a sensor times out or is de-registered, so
+ * the column is visually blank and ready to accept a new room.
+ *
+ * @param col  Column index, 0…SENSOR_MAX_ROOMS-1.
+ */
+void display_remove_sensor(uint8_t col);
+
+/**
  * @brief FreeRTOS task entry point (osThreadFunc_t).
  *
  * Initialises the display and loops.  When g_sensor_queue is wired up,

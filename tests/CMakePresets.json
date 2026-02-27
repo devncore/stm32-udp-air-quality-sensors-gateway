@@ -1,0 +1,29 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": { "major": 3, "minor": 22, "patch": 0 },
+    "configurePresets": [
+        {
+            "name": "tests",
+            "displayName": "Host unit tests",
+            "description": "Build and run unit tests with the host compiler (no ARM toolchain)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/../build/tests",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "tests",
+            "configurePreset": "tests"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "tests",
+            "configurePreset": "tests",
+            "output": { "verbosity": "verbose" }
+        }
+    ]
+}

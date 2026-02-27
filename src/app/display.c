@@ -50,6 +50,11 @@
 #include <string.h>
 
 /*============================================================================
+ * Display task
+ *============================================================================*/
+#define DISPLAY_TASK_TIMEOUT_TICKS 1500
+
+/*============================================================================
  * Layout constants
  *============================================================================*/
 
@@ -157,7 +162,10 @@ static void write_clipped(const char *str, uint8_t w)
     }
 
     char buf[8];
-    size_t len = strnlen(str, (size_t)max_chars);
+    size_t len = strlen(str);
+    if (len > (size_t)max_chars) {
+        len = (size_t)max_chars;
+    }
     if (len >= sizeof(buf)) {
         len = sizeof(buf) - 1u;
     }
@@ -243,6 +251,23 @@ void display_update_sensor(uint8_t col, const sensor_data_t *data)
     ssd1306_UpdateScreen();
 }
 
+void display_remove_sensor(uint8_t col)
+{
+    if (col >= N_AREAS) {
+        return;
+    }
+
+    const uint8_t x = col_x(col);
+    const uint8_t w = col_w(col);
+
+    clear_and_set_cursor(x, field_y(FIELD_ROOM), w);
+    clear_and_set_cursor(x, field_y(FIELD_TEMP), w);
+    clear_and_set_cursor(x, field_y(FIELD_HUM),  w);
+    clear_and_set_cursor(x, field_y(FIELD_IAQ),  w);
+
+    ssd1306_UpdateScreen();
+}
+
 /*============================================================================
  * FreeRTOS task
  *============================================================================*/
@@ -260,19 +285,31 @@ void display_task(void *argument)
      */
     static bool room_drawn[SENSOR_MAX_ROOMS] = {false};
      for (;;) {
-         sensor_data_t data;
-         osMessageQueueGet(g_sensor_queue, &data, NULL, osWaitForever);
+        sensor_data_t data;
+         const osStatus_t queue_status = osMessageQueueGet(g_sensor_queue, &data, NULL, DISPLAY_TASK_TIMEOUT_TICKS);
 
-         // if sensor is referenced as 'active', then we update the display.
-         // Otherwise, incoming data is discarded.
-         const uint8_t col = displayed_sensor_update(data.room);
-         if(col!=NO_ACTIVE_INDEX_AVAILABLE)
+         // update sensor timestamps and evaluate wether any timeout
+         uint8_t index_of_timeout = displayed_sensor_evaluate_timeout();
+         if(index_of_timeout != NO_TIMEOUT)
          {
-            if (!room_drawn[col]) {
-                display_draw_room(col, data.room);
-                room_drawn[col] = true;
+            display_remove_sensor(index_of_timeout);
+            room_drawn[index_of_timeout] = false;
+         }
+
+         // process data if available
+         if(queue_status == osOK)
+         {
+            // if sensor is referenced as 'active', then we update the display.
+            // Otherwise, incoming data is discarded.
+            const uint8_t col = displayed_sensor_update(data.room);
+            if(col!=NO_ACTIVE_INDEX_AVAILABLE)
+            {
+                if (!room_drawn[col]) {
+                    display_draw_room(col, data.room);
+                    room_drawn[col] = true;
+                }
+                display_update_sensor(col, &data);
             }
-            display_update_sensor(col, &data);
         }
      }
 }
