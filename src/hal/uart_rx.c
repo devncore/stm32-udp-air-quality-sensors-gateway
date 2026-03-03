@@ -4,8 +4,8 @@
  *
  * Byte-level ISR reception via HAL_UART_Receive_IT. A state machine parses
  * the ESP8266 "+IPD,<len>:<payload>" framing and sends complete payloads
- * into the FreeRTOS MessageBuffer x_message_buffer, which wakes the network
- * task via its built-in task notification.
+ * into the FreeRTOS MessageBuffer provided at init time, which wakes the
+ * network task via its built-in task notification.
  *
  * The MessageBuffer is lock-free (single producer ISR, single consumer task).
  */
@@ -17,10 +17,10 @@
 #include "projdefs.h"
 
 /*============================================================================
- * MessageBuffer (extern'd in uart_rx.h)
+ * Diagnostics
  *============================================================================*/
 
-MessageBufferHandle_t x_message_buffer;
+volatile uint32_t uart_rx_overflow_count = 0U;
 
 /*============================================================================
  * +IPD state machine
@@ -39,8 +39,9 @@ static const char IPD_PATTERN[] = "IPD,";  /* After '+', match these 4 chars */
 
 /** Private state */
 static struct {
-    UART_HandleTypeDef* huart;
-    uint8_t rx_byte;            /**< Single byte for HAL_UART_Receive_IT */
+    UART_HandleTypeDef*   huart;
+    MessageBufferHandle_t msg_buf;      /**< MessageBuffer owned by main.c */
+    uint8_t rx_byte;                    /**< Single byte for HAL_UART_Receive_IT */
 
     rx_state_t state;
     uint8_t match_idx;          /**< Index into IPD_PATTERN during MATCH_IPD */
@@ -82,13 +83,15 @@ static void rx_process_byte(uint8_t byte)
         if (byte >= '0' && byte <= '9') {
             s_rx.payload_len = s_rx.payload_len * 10u + (byte - '0');
         } else if (byte == ':') {
-            /* Currently: only frame 1 currently supported */
-            if (s_rx.payload_len != FRAME_1_PAYLOAD_LEN) {
-                /* Invalid or oversized length: discard */
-                s_rx.state = RX_STATE_IDLE;
-            } else {
+            switch (s_rx.payload_len) {
+            case FRAME_1_PAYLOAD_LEN:
                 s_rx.state = RX_STATE_RECV_PAYLOAD;
                 s_rx.payload_idx = 0;
+                break;
+            default:
+                /* Unsupported frame length: discard */
+                s_rx.state = RX_STATE_IDLE;
+                break;
             }
         } else {
             /* Unexpected character — discard */
@@ -101,12 +104,15 @@ static void rx_process_byte(uint8_t byte)
         s_rx.payload_idx++;
 
         if (s_rx.payload_idx == s_rx.payload_len) {
-            // TODO(me): treat the case where buffer is full, currently it is silently dropped
-            BaseType_t woken = pdTRUE;
-            xMessageBufferSendFromISR(x_message_buffer,s_rx.payload_buf,FRAME_1_PAYLOAD_LEN,&woken);
+            BaseType_t woken = pdFALSE;
+            const size_t sent = xMessageBufferSendFromISR(
+                s_rx.msg_buf, s_rx.payload_buf, FRAME_1_PAYLOAD_LEN, &woken);
+            if (sent == 0U) {
+                uart_rx_overflow_count++;
+            }
             s_rx.state = RX_STATE_IDLE;
             portYIELD_FROM_ISR(woken);
-            }
+        }
         break;
     }
 }
@@ -131,16 +137,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart)
  * Public API
  *============================================================================*/
 
-void uart_rx_init(UART_HandleTypeDef* huart)
+void uart_rx_init(UART_HandleTypeDef* huart, MessageBufferHandle_t msg_buf)
 {
-    s_rx.huart = huart;
-    s_rx.state = RX_STATE_IDLE;
-    s_rx.rx_byte = 0;
-    s_rx.match_idx = 0;
+    s_rx.huart       = huart;
+    s_rx.msg_buf     = msg_buf;
+    s_rx.state       = RX_STATE_IDLE;
+    s_rx.rx_byte     = 0;
+    s_rx.match_idx   = 0;
     s_rx.payload_len = 0;
     s_rx.payload_idx = 0;
-
-    x_message_buffer = xMessageBufferCreate(RTOS_MESSAGE_BUFFER_LEN);
 }
 
 void uart_rx_start(void)

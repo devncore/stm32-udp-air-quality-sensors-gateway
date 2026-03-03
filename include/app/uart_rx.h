@@ -3,14 +3,15 @@
  * @brief UART RX interrupt-driven reception for ESP8266 +IPD frames
  *
  * Receives bytes via UART interrupt, parses +IPD,<len>:<payload> frames
- * from the ESP8266, and sends complete payloads into the FreeRTOS
- * MessageBuffer x_message_buffer. The network task blocks on the
- * MessageBuffer and is woken automatically when a new frame is ready.
+ * from the ESP8266, and sends complete payloads into a FreeRTOS MessageBuffer
+ * provided by the caller. The network task blocks on the MessageBuffer and is
+ * woken automatically when a new frame is ready.
  *
  * Usage:
- *   1. Call uart_rx_init() once at startup (before RTOS scheduler starts)
- *   2. Use blocking UART for AT commands (init, WiFi, UDP start)
- *   3. Call uart_rx_start() to switch to interrupt-driven reception
+ *   1. Create a MessageBuffer (xMessageBufferCreate) in main.
+ *   2. Call uart_rx_init() with the UART handle and MessageBuffer handle.
+ *   3. Use blocking UART for AT commands (init, WiFi, UDP start).
+ *   4. Call uart_rx_start() to switch to interrupt-driven reception.
  */
 
 #ifndef UART_RX_H
@@ -22,7 +23,17 @@
 #include "FreeRTOS.h"          /* must precede message_buffer.h */
 #include "message_buffer.h"
 
-extern MessageBufferHandle_t x_message_buffer;
+/*============================================================================
+ * Diagnostics
+ *============================================================================*/
+
+/**
+ * @brief Count of ISR frames dropped because the MessageBuffer was full.
+ *
+ * Incremented from ISR context; read from task context. Declared volatile
+ * so the compiler does not cache it across accesses.
+ */
+extern volatile uint32_t uart_rx_overflow_count;
 
 /*============================================================================
  * Public API
@@ -31,12 +42,14 @@ extern MessageBufferHandle_t x_message_buffer;
 /**
  * @brief Initialise the UART RX module.
  *
- * Stores the UART handle and resets internal state. Must be called before
- * the RTOS scheduler starts. Does NOT enable interrupts yet.
+ * Stores the UART handle and MessageBuffer handle, then resets internal
+ * state. Does NOT enable interrupts yet.
  *
- * @param huart  HAL UART handle (USART2)
+ * @param huart    HAL UART handle (USART2)
+ * @param msg_buf  FreeRTOS MessageBuffer to post complete payloads into.
+ *                 Must be created by the caller before invoking this function.
  */
-void uart_rx_init(UART_HandleTypeDef* huart);
+void uart_rx_init(UART_HandleTypeDef* huart, MessageBufferHandle_t msg_buf);
 
 /**
  * @brief Start interrupt-driven UART reception.

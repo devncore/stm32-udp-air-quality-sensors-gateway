@@ -22,11 +22,36 @@
 #define CONFIG_WIFI_PASSWORD            "YOUR_PASSWORD"
 #define CONFIG_WIFI_CONNECT_TIMEOUT_MS  30000U
 
+/** Maximum WiFi connection attempts before triggering a system reset. */
+#define CONFIG_WIFI_MAX_RETRIES          3U
+/** Initial retry delay (ms); doubles on each attempt up to the cap. */
+#define CONFIG_WIFI_RETRY_BASE_DELAY_MS  5000U
+/** Maximum retry delay (ms) after exponential backoff. */
+#define CONFIG_WIFI_RETRY_MAX_DELAY_MS   30000U
+
+/* ── ESP8266 AT command timeouts ─────────────────────────────────────────── */
+
+/** Timeout (ms) for quick AT commands: ATE0, CWMODE, CIPMUX, RST send. */
+#define CONFIG_ESP8266_CMD_TIMEOUT_MS         1000U
+/** Timeout (ms) for slow operations: AT test, reset-ready, post-join OK, CIPSTART. */
+#define CONFIG_ESP8266_INIT_TIMEOUT_MS        5000U
+/** Timeout (ms) for disconnect/query commands: CWQAP, CIPCLOSE, CIFSR. */
+#define CONFIG_ESP8266_DISCONNECT_TIMEOUT_MS  2000U
+/** Inter-byte polling timeout (ms) during blocking UART receive. */
+#define CONFIG_ESP8266_BYTE_RX_TIMEOUT_MS       10U
+/** Extra wait (ms) for a complete UDP payload after the +IPD header. */
+#define CONFIG_ESP8266_PAYLOAD_TIMEOUT_MS     4000U
+
 /*============================================================================
  * UDP Server Configuration
  *============================================================================*/
 
 #define CONFIG_UDP_LOCAL_PORT            4210U
+
+/** Maximum UDP start attempts before triggering a system reset. */
+#define CONFIG_UDP_MAX_RETRIES           3U
+/** Delay (ms) between UDP start retry attempts. */
+#define CONFIG_UDP_RETRY_DELAY_MS        2000U
 
 /*============================================================================
  * UART RX / Frame Format
@@ -51,5 +76,12 @@
 
 #define CONFIG_DISPLAY_TASK_STACK_SIZE   512U   /* words */
 #define CONFIG_DISPLAY_TASK_PRIORITY     (osPriorityBelowNormal)
+
+
+/*============================================================================
+ * Sensors display Configuration
+ *============================================================================*/
+ 
+#define DISPLAY_SENSOR_TIMEOUT_MS 5000U
 
 #endif /* CONFIG_H */

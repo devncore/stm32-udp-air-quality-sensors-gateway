@@ -10,6 +10,31 @@
 #ifndef APP_NETWORK_H
 #define APP_NETWORK_H
 
+#include "FreeRTOS.h"          /* must precede message_buffer.h */
+#include "message_buffer.h"
+#include "cmsis_os.h"
+#include "drivers/esp8266/esp8266.h"
+
+/*============================================================================
+ * Task configuration
+ *============================================================================*/
+
+/**
+ * @brief Configuration passed to network_task() via its pvParameters argument.
+ *
+ * Bundles all resources the task needs so that ownership is explicit and
+ * no module-level globals are required.
+ */
+typedef struct {
+    esp8266_t             *esp;          /**< ESP8266 driver instance (owned by main) */
+    MessageBufferHandle_t  msg_buf;      /**< MessageBuffer for ISR → task frame delivery */
+    osMessageQueueId_t     sensor_queue; /**< Queue for pushing decoded sensor frames */
+} network_task_config_t;
+
+/*============================================================================
+ * Task entry point
+ *============================================================================*/
+
 /**
  * @brief Network task entry point (osThreadFunc_t).
  *
@@ -17,7 +42,8 @@
  * Phase 2 (interrupt UART): switches to ISR-driven reception and posts
  * decoded sensor frames to g_sensor_queue for the display task.
  *
- * @param argument  Pointer to an esp8266_t instance (must not be NULL)
+ * @param argument  Pointer to a network_task_config_t (must not be NULL).
+ *                  The pointed-to struct must remain valid for the task lifetime.
  */
 void network_task(void* argument);
 

@@ -1,4 +1,5 @@
 #include "app/displayed_sensor_management.h"
+#include "app/config.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -10,7 +11,6 @@
 // constants
 #define ROOM_NAME_MAX_SIZE 16U
 #define NUMBER_OF_SUPPORTED_SENSORS 4
-#define SENSOR_TIMEOUT_MS 5000U
 
 // internal types
 typedef struct
@@ -19,10 +19,10 @@ typedef struct
     uint8_t current_index;
     uint32_t last_timestamp_milliseconds;
     bool is_active;
-} sensor_data_t;
+} sensor_slot_t;
 
 // keep some static data which represents 'active' sensors
-static sensor_data_t active_sensors[NUMBER_OF_SUPPORTED_SENSORS];
+static sensor_slot_t active_sensors[NUMBER_OF_SUPPORTED_SENSORS];
 
 // helpers
 static inline uint32_t current_time_stamp_ms()
@@ -84,7 +84,7 @@ uint8_t displayed_sensor_evaluate_timeout(void)
             continue;
         }
 
-        if((now - active_sensors[i].last_timestamp_milliseconds) >= SENSOR_TIMEOUT_MS)
+        if((now - active_sensors[i].last_timestamp_milliseconds) >= DISPLAY_SENSOR_TIMEOUT_MS)
         {
             active_sensors[i].is_active = false;
             return i;

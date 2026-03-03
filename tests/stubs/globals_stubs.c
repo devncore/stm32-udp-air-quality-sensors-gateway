@@ -2,11 +2,8 @@
  * @file globals_stubs.c
  * @brief Stub definitions for shared application globals used in tests.
  *
- * network_data.h declares g_sensor_queue as extern; this file provides
- * a NULL definition so test executables that pull in display.c can link.
+ * g_sensor_queue is now passed explicitly via task config structs and is
+ * no longer an extern global, so no stubs are currently required.
  */
 
-#include <stddef.h>
-#include "app/network_data.h"
-
-osMessageQueueId_t g_sensor_queue = NULL;
+typedef int globals_stubs_unused_t;

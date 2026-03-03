@@ -7,9 +7,12 @@
  */
 
 #include "drivers/esp8266/esp8266.h"
+#include "app/config.h"
 #include "stm32f4xx_hal_uart.h"
 
+#include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /*============================================================================
@@ -58,7 +61,7 @@ static void read_available(esp8266_t* dev)
     do {
         received = stm32_uart_receive(dev->uart,
                                        dev->rx_buffer + dev->rx_index,
-                                       1, 10);
+                                       1, CONFIG_ESP8266_BYTE_RX_TIMEOUT_MS);
         if (received > 0) {
             dev->rx_index += 1;
             space--;
@@ -115,6 +118,47 @@ static esp8266_error_t transmit_raw(esp8266_t* dev, const char* command)
     return ESP8266_OK;
 }
 
+/** Parse a dotted-decimal IPv4 string (e.g. "192.168.1.1") into a 4-byte array.
+ *  Returns true on success, false if the string is malformed. */
+static bool parse_ipv4(const char* str, uint8_t ip[4])
+{
+    const char* p = str;
+    char* end;
+    for (int i = 0; i < 4; i++) {
+        errno = 0;
+        unsigned long octet = strtoul(p, &end, 10);
+        if (end == p || errno != 0 || octet > 255U) {
+            return false;
+        }
+        ip[i] = (uint8_t)octet;
+        p = end;
+        if (i < 3) {
+            if (*p != '.') {
+                return false;
+            }
+            p++;
+        }
+    }
+    return true;
+}
+
+/** Parse the decimal payload length from a "+IPD,<len>:" prefix.
+ *  @param ipd_pos  Pointer to the '+' of "+IPD,".
+ *  @param out_len  Receives the parsed length on success.
+ *  Returns true on success, false if parsing fails or length is non-positive. */
+static bool parse_ipd_length(const char* ipd_pos, int* out_len)
+{
+    const char* num_start = ipd_pos + 5; /* skip "+IPD," */
+    char* end;
+    errno = 0;
+    long val = strtol(num_start, &end, 10);
+    if (end == num_start || errno != 0 || val <= 0) {
+        return false;
+    }
+    *out_len = (int)val;
+    return true;
+}
+
 /** Send AT command and wait for expected response */
 static esp8266_error_t send_command(esp8266_t* dev, const char* command,
                                      const char* expected_response,
@@ -150,22 +194,22 @@ esp8266_error_t esp8266_init(esp8266_t* dev)
     clear_rx_buffer(dev);
 
     /* Test communication */
-    if (send_command(dev, "AT", AT_OK, 5000) != ESP8266_OK) {
+    if (send_command(dev, "AT", AT_OK, CONFIG_ESP8266_INIT_TIMEOUT_MS) != ESP8266_OK) {
         return ESP8266_ERR_TIMEOUT;
     }
 
     /* Disable echo */
-    if (send_command(dev, "ATE0", AT_OK, 1000) != ESP8266_OK) {
+    if (send_command(dev, "ATE0", AT_OK, CONFIG_ESP8266_CMD_TIMEOUT_MS) != ESP8266_OK) {
         return ESP8266_ERR_COMMAND_ERROR;
     }
 
     /* Station mode */
-    if (send_command(dev, "AT+CWMODE=1", AT_OK, 1000) != ESP8266_OK) {
+    if (send_command(dev, "AT+CWMODE=1", AT_OK, CONFIG_ESP8266_CMD_TIMEOUT_MS) != ESP8266_OK) {
         return ESP8266_ERR_COMMAND_ERROR;
     }
 
     /* Single connection mode */
-    if (send_command(dev, "AT+CIPMUX=0", AT_OK, 1000) != ESP8266_OK) {
+    if (send_command(dev, "AT+CIPMUX=0", AT_OK, CONFIG_ESP8266_CMD_TIMEOUT_MS) != ESP8266_OK) {
         return ESP8266_ERR_COMMAND_ERROR;
     }
 
@@ -181,11 +225,11 @@ esp8266_error_t esp8266_reset(esp8266_t* dev)
     dev->state = ESP8266_STATE_DISCONNECTED;
     dev->udp_listening = false;
 
-    if (send_command(dev, "AT+RST", AT_OK, 1000) != ESP8266_OK) {
+    if (send_command(dev, "AT+RST", AT_OK, CONFIG_ESP8266_CMD_TIMEOUT_MS) != ESP8266_OK) {
         return ESP8266_ERR_COMMAND_ERROR;
     }
 
-    if (wait_for_response(dev, AT_READY, 5000) != ESP8266_WAIT_FOUND) {
+    if (wait_for_response(dev, AT_READY, CONFIG_ESP8266_INIT_TIMEOUT_MS) != ESP8266_WAIT_FOUND) {
         return ESP8266_ERR_TIMEOUT;
     }
 
@@ -229,7 +273,7 @@ esp8266_error_t esp8266_connect_wifi(esp8266_t* dev,
                                         : ESP8266_ERR_TIMEOUT;
     }
 
-    wr = wait_for_response(dev, AT_OK, 5000);
+    wr = wait_for_response(dev, AT_OK, CONFIG_ESP8266_INIT_TIMEOUT_MS);
     if (wr != ESP8266_WAIT_FOUND) {
         dev->state = ESP8266_STATE_ERROR;
         return ESP8266_ERR_TIMEOUT;
@@ -246,7 +290,7 @@ esp8266_error_t esp8266_disconnect_wifi(esp8266_t* dev)
     }
 
     dev->udp_listening = false;
-    esp8266_error_t err = send_command(dev, "AT+CWQAP", AT_OK, 2000);
+    esp8266_error_t err = send_command(dev, "AT+CWQAP", AT_OK, CONFIG_ESP8266_DISCONNECT_TIMEOUT_MS);
     dev->state = ESP8266_STATE_DISCONNECTED;
     return err;
 }
@@ -277,7 +321,7 @@ esp8266_error_t esp8266_get_ip_info(esp8266_t* dev, esp8266_ip_info_t* info)
         return err;
     }
 
-    if (wait_for_response(dev, AT_OK, 2000) != ESP8266_WAIT_FOUND) {
+    if (wait_for_response(dev, AT_OK, CONFIG_ESP8266_DISCONNECT_TIMEOUT_MS) != ESP8266_WAIT_FOUND) {
         return ESP8266_ERR_TIMEOUT;
     }
 
@@ -286,17 +330,7 @@ esp8266_error_t esp8266_get_ip_info(esp8266_t* dev, esp8266_ip_info_t* info)
     /* Parse STAIP */
     const char* pos = response_find(dev, "+CIFSR:STAIP,\"");
     if (pos != NULL) {
-        pos += 14;  /* Skip prefix */
-        unsigned int a = 0;
-        unsigned int b = 0;
-        unsigned int c = 0;
-        unsigned int d = 0;
-        if (sscanf(pos, "%u.%u.%u.%u", &a, &b, &c, &d) == 4) {
-            info->ip[0] = (uint8_t)a;
-            info->ip[1] = (uint8_t)b;
-            info->ip[2] = (uint8_t)c;
-            info->ip[3] = (uint8_t)d;
-        }
+        parse_ipv4(pos + 14, info->ip);  /* +14 to skip "+CIFSR:STAIP,\"" prefix */
     }
 
     return ESP8266_OK;
@@ -328,7 +362,7 @@ esp8266_error_t esp8266_udp_start(esp8266_t* dev, uint16_t local_port)
         return ESP8266_ERR_BUFFER_OVERFLOW;
     }
 
-    esp8266_error_t err = send_command(dev, cmd, AT_OK, 5000);
+    esp8266_error_t err = send_command(dev, cmd, AT_OK, CONFIG_ESP8266_INIT_TIMEOUT_MS);
     if (err == ESP8266_OK) {
         dev->udp_listening = true;
     }
@@ -343,7 +377,7 @@ esp8266_error_t esp8266_udp_stop(esp8266_t* dev)
     }
 
     dev->udp_listening = false;
-    return send_command(dev, "AT+CIPCLOSE", AT_OK, 2000);
+    return send_command(dev, "AT+CIPCLOSE", AT_OK, CONFIG_ESP8266_DISCONNECT_TIMEOUT_MS);
 }
 
 int32_t esp8266_udp_receive(esp8266_t* dev, uint8_t* buffer,
@@ -374,8 +408,8 @@ int32_t esp8266_udp_receive(esp8266_t* dev, uint8_t* buffer,
         return -1;
     }
 
-    int data_len = 0;
-    if (sscanf(ipd_pos + 5, "%d", &data_len) != 1) {
+    int data_len;
+    if (!parse_ipd_length(ipd_pos, &data_len)) {
         return -1;
     }
 
@@ -384,7 +418,7 @@ int32_t esp8266_udp_receive(esp8266_t* dev, uint8_t* buffer,
     /* Wait for complete payload */
     uint32_t extra_start = HAL_GetTick();
     while (dev->rx_index - data_start < (size_t)data_len &&
-           (HAL_GetTick() - extra_start) < 4000) {
+           (HAL_GetTick() - extra_start) < CONFIG_ESP8266_PAYLOAD_TIMEOUT_MS) {
         read_available(dev);
     }
 

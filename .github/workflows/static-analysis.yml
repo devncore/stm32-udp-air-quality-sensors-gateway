@@ -1,0 +1,29 @@
+name: Static Analysis
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  clang-tidy:
+    name: Run clang-tidy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc-arm-none-eabi clang-tidy python3
+
+      - name: Generate compile_commands.json
+        run: cmake -S . -B build
+
+      - name: Run clang-tidy
+        run: bash run_clang_tidy.sh

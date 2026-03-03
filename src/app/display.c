@@ -97,7 +97,7 @@
  * Air quality label table
  *============================================================================*/
 
-static const char * const k_aq_label[] = {
+static const char * const K_AQ_LABEL[] = {
     "PERF",   /* AIR_QUALITY_PERFECT   (IAQ   0– 50) */
     "V.GD",   /* AIR_QUALITY_VERY_GOOD (IAQ  51–100) */
     "GOOD",   /* AIR_QUALITY_GOOD      (IAQ 101–150) */
@@ -181,11 +181,11 @@ static void write_clipped(const char *str, uint8_t w)
 
 air_quality_t display_iaq_classify(uint16_t iaq)
 {
-    if (iaq <=  50u) return AIR_QUALITY_PERFECT;
-    if (iaq <= 100u) return AIR_QUALITY_VERY_GOOD;
-    if (iaq <= 150u) return AIR_QUALITY_GOOD;
-    if (iaq <= 200u) return AIR_QUALITY_MEDIUM;
-    if (iaq <= 300u) return AIR_QUALITY_BAD;
+    if (iaq <=  50u) { return AIR_QUALITY_PERFECT; }
+    if (iaq <= 100u) { return AIR_QUALITY_VERY_GOOD; }
+    if (iaq <= 150u) { return AIR_QUALITY_GOOD; }
+    if (iaq <= 200u) { return AIR_QUALITY_MEDIUM; }
+    if (iaq <= 300u) { return AIR_QUALITY_BAD; }
     return AIR_QUALITY_VERY_BAD;
 }
 
@@ -209,26 +209,26 @@ void display_init(void)
     ssd1306_UpdateScreen();
 }
 
-void display_draw_room(uint8_t col, const char *name)
+void display_draw_room(uint8_t sensor_col, const char *name)
 {
-    if (col >= N_AREAS || name == NULL) {
+    if (sensor_col >= N_AREAS || name == NULL) {
         return;
     }
 
-    ssd1306_SetCursor(col_x(col), field_y(FIELD_ROOM));
-    write_clipped(name, col_w(col));
+    ssd1306_SetCursor(col_x(sensor_col), field_y(FIELD_ROOM));
+    write_clipped(name, col_w(sensor_col));
 
     ssd1306_UpdateScreen();
 }
 
-void display_update_sensor(uint8_t col, const sensor_data_t *data)
+void display_draw_sensor(uint8_t sensor_col, const sensor_data_t *data)
 {
-    if (col >= N_AREAS || data == NULL || !data->valid) {
+    if (sensor_col >= N_AREAS || data == NULL || !data->valid) {
         return;
     }
 
-    const uint8_t x = col_x(col);
-    const uint8_t w = col_w(col);
+    const uint8_t x = col_x(sensor_col);
+    const uint8_t w = col_w(sensor_col);
     char buf[8];
 
     /* Temperature  —  e.g. "23°C"
@@ -246,19 +246,19 @@ void display_update_sensor(uint8_t col, const sensor_data_t *data)
     /* Air quality label */
     air_quality_t aq = display_iaq_classify(data->iaq);
     clear_and_set_cursor(x, field_y(FIELD_IAQ), w);
-    write_clipped(k_aq_label[aq], w);
+    write_clipped(K_AQ_LABEL[aq], w);
 
     ssd1306_UpdateScreen();
 }
 
-void display_remove_sensor(uint8_t col)
+void display_remove_sensor(uint8_t sensor_col)
 {
-    if (col >= N_AREAS) {
+    if (sensor_col >= N_AREAS) {
         return;
     }
 
-    const uint8_t x = col_x(col);
-    const uint8_t w = col_w(col);
+    const uint8_t x = col_x(sensor_col);
+    const uint8_t w = col_w(sensor_col);
 
     clear_and_set_cursor(x, field_y(FIELD_ROOM), w);
     clear_and_set_cursor(x, field_y(FIELD_TEMP), w);
@@ -274,19 +274,14 @@ void display_remove_sensor(uint8_t col)
 
 void display_task(void *argument)
 {
-    (void)argument;
+    const display_task_config_t* cfg = argument;
 
     display_init();
 
-    /*
-     * TODO: wire up g_sensor_queue once the OS data path is ready.
-     *
-     * When the queue is live, replace the delay loop below with:
-     */
     static bool room_drawn[SENSOR_MAX_ROOMS] = {false};
-     for (;;) {
+    for (;;) {
         sensor_data_t data;
-         const osStatus_t queue_status = osMessageQueueGet(g_sensor_queue, &data, NULL, DISPLAY_TASK_TIMEOUT_TICKS);
+        const osStatus_t queue_status = osMessageQueueGet(cfg->sensor_queue, &data, NULL, DISPLAY_TASK_TIMEOUT_TICKS);
 
          // update sensor timestamps and evaluate wether any timeout
          uint8_t index_of_timeout = displayed_sensor_evaluate_timeout();
@@ -301,14 +296,14 @@ void display_task(void *argument)
          {
             // if sensor is referenced as 'active', then we update the display.
             // Otherwise, incoming data is discarded.
-            const uint8_t col = displayed_sensor_update(data.room);
-            if(col!=NO_ACTIVE_INDEX_AVAILABLE)
+            const uint8_t sensor_col = displayed_sensor_update(data.room);
+            if(sensor_col != NO_ACTIVE_INDEX_AVAILABLE)
             {
-                if (!room_drawn[col]) {
-                    display_draw_room(col, data.room);
-                    room_drawn[col] = true;
+                if (!room_drawn[sensor_col]) {
+                    display_draw_room(sensor_col, data.room);
+                    room_drawn[sensor_col] = true;
                 }
-                display_update_sensor(col, &data);
+                display_draw_sensor(sensor_col, &data);
             }
         }
      }

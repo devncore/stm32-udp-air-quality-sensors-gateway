@@ -40,11 +40,16 @@ static stm32_uart_t* g_uart;
 /* Driver instances */
 static esp8266_t g_esp8266;
 
+/* Task configurations (must outlive app_main) */
+static network_task_config_t g_network_cfg;
+static display_task_config_t g_display_cfg;
+
 /*============================================================================
  * Shared synchronisation primitives
  *============================================================================*/
 
-osMessageQueueId_t g_sensor_queue;
+static osMessageQueueId_t g_sensor_queue;
+static MessageBufferHandle_t g_msg_buffer;
 
 /*============================================================================
  * Application entry point
@@ -54,37 +59,41 @@ void app_main(void)
 {
     /* HAL and peripherals are already initialised by CubeMX main() */
 
-    /* Create HAL interface */
-    g_uart = stm32_uart_init(&huart2);
+    /* affect shared queue/buffer */
+    g_sensor_queue = osMessageQueueNew(8, sizeof(sensor_data_t), NULL);
+    g_msg_buffer = xMessageBufferCreate(RTOS_MESSAGE_BUFFER_LEN);
 
-    /* Create driver instance */
+    /* initialization of uart */
+    g_uart = stm32_uart_init(&huart2);
+    uart_rx_init(&huart2, g_msg_buffer);
+
+    /* external components intizialisation */
     esp8266_create(&g_esp8266, g_uart);
 
-    /* Initialise UART RX module (does NOT enable interrupts yet) */
-    uart_rx_init(&huart2);
 
-    /* Create synchronisation primitives */
+    /* ------------------------------------------ */
+    /* --------------- RTOS tasks --------------- */
+    /* ------------------------------------------ */
 
-    // shared queue between network and display tasks
-    // network task: produce new sensor data
-    // display task: consume those data
-    g_sensor_queue = osMessageQueueNew(8, sizeof(sensor_data_t), NULL);
-
-    /* Create Network Task (high priority, per SOFTWARE.md) */
+    /* Create Network Task (high priority) */
+    g_network_cfg.esp          = &g_esp8266;
+    g_network_cfg.msg_buf      = g_msg_buffer;
+    g_network_cfg.sensor_queue = g_sensor_queue;
     const osThreadAttr_t network_attr = {
         .name       = "networkTask",
         .stack_size = CONFIG_NETWORK_TASK_STACK_SIZE * 4,
         .priority   = (osPriority_t)CONFIG_NETWORK_TASK_PRIORITY,
     };
-    osThreadNew(network_task, &g_esp8266, &network_attr);
+    osThreadNew(network_task, &g_network_cfg, &network_attr);
 
-    /* Create Display Task (low priority, per SOFTWARE.md) */
+    /* Create Display Task (low priority) */
+    g_display_cfg.sensor_queue = g_sensor_queue;
     const osThreadAttr_t display_attr = {
         .name       = "displayTask",
-        .stack_size = CONFIG_NETWORK_TASK_STACK_SIZE * 4,
-        .priority   = (osPriority_t)CONFIG_NETWORK_TASK_PRIORITY,
+        .stack_size = CONFIG_DISPLAY_TASK_STACK_SIZE * 4,
+        .priority   = (osPriority_t)CONFIG_DISPLAY_TASK_PRIORITY,
     };
-    osThreadNew(display_task, NULL, &display_attr);
+    osThreadNew(display_task, &g_display_cfg, &display_attr);
 
     /*
      * The calling thread (defaultTask) is no longer needed.

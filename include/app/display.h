@@ -18,6 +18,7 @@
 
 #include <stdint.h>
 #include "app/network_data.h"
+#include "cmsis_os.h"
 
 /*============================================================================
  * Air quality classification
@@ -61,12 +62,12 @@ void display_init(void);
  *
  * Intended to be called exactly once per column when the first sensor frame
  * for that room arrives.  The label is clipped to fit the column width and is
- * NOT overwritten by subsequent display_update_sensor() calls.
+ * NOT overwritten by subsequent display_draw_sensor() calls.
  *
- * @param col   Column index, 0…SENSOR_MAX_ROOMS-1 (left → right).
- * @param name  Null-terminated room name string.
+ * @param sensor_col  Sensor column index, 0…SENSOR_MAX_ROOMS-1 (left → right).
+ * @param name        Null-terminated room name string.
  */
-void display_draw_room(uint8_t col, const char *name);
+void display_draw_room(uint8_t sensor_col, const char *name);
 
 /**
  * @brief Refresh the dynamic fields (temperature, humidity, air quality)
@@ -75,10 +76,10 @@ void display_draw_room(uint8_t col, const char *name);
  * The room name field is left untouched.  A single ssd1306_UpdateScreen()
  * call is issued at the end so all three fields appear simultaneously.
  *
- * @param col   Column index, 0…SENSOR_MAX_ROOMS-1.
- * @param data  Pointer to the latest sensor data; must be non-NULL and valid.
+ * @param sensor_col  Sensor column index, 0…SENSOR_MAX_ROOMS-1.
+ * @param data        Pointer to the latest sensor data; must be non-NULL and valid.
  */
-void display_update_sensor(uint8_t col, const sensor_data_t *data);
+void display_draw_sensor(uint8_t sensor_col, const sensor_data_t *data);
 
 /**
  * @brief Erase all displayed data for one sensor column.
@@ -90,18 +91,25 @@ void display_update_sensor(uint8_t col, const sensor_data_t *data);
  * Intended to be called when a sensor times out or is de-registered, so
  * the column is visually blank and ready to accept a new room.
  *
- * @param col  Column index, 0…SENSOR_MAX_ROOMS-1.
+ * @param sensor_col  Sensor column index, 0…SENSOR_MAX_ROOMS-1.
  */
-void display_remove_sensor(uint8_t col);
+void display_remove_sensor(uint8_t sensor_col);
+
+/**
+ * @brief Configuration passed to display_task() via its pvParameters argument.
+ */
+typedef struct {
+    osMessageQueueId_t sensor_queue; /**< Queue from which decoded sensor frames are consumed */
+} display_task_config_t;
 
 /**
  * @brief FreeRTOS task entry point (osThreadFunc_t).
  *
- * Initialises the display and loops.  When g_sensor_queue is wired up,
- * this task will block on the queue and drive display_draw_room() /
- * display_update_sensor() as frames arrive.
+ * Initialises the display and loops, blocking on sensor_queue and driving
+ * display_draw_room() / display_draw_sensor() as frames arrive.
  *
- * @param argument  Unused (reserved for future use).
+ * @param argument  Pointer to a display_task_config_t (must not be NULL).
+ *                  The pointed-to struct must remain valid for the task lifetime.
  */
 void display_task(void *argument);
 
