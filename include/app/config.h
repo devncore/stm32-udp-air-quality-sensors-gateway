@@ -84,4 +84,10 @@
  
 #define DISPLAY_SENSOR_TIMEOUT_MS 5000U
 
+/*============================================================================
+ * Error management
+ *============================================================================*/
+
+#define RETRY_NETWORK_INIT_AFTER_FAIL_MS 10000U
+
 #endif /* CONFIG_H */

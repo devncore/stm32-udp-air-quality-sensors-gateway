@@ -46,6 +46,7 @@ set(APP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/app/display.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/app/displayed_sensor_management.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/app/frame_parser.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/app/error_manager.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hal/hal_interface.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hal/uart_rx.c
 )

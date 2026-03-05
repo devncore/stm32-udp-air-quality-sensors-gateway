@@ -4,7 +4,9 @@
  */
 
 #include "app/frame_parser.h"
+#include "app/error_manager.h"
 
+#include <stdbool.h>
 #include <string.h>
 
 uint16_t crc16_ccitt(const uint8_t *data, size_t len)
@@ -20,22 +22,28 @@ uint16_t crc16_ccitt(const uint8_t *data, size_t len)
     return crc;
 }
 
-bool parse_sensor_frame(const uint8_t *buf, sensor_data_t *out)
+bool validate_type(uint8_t type)
 {
-    if (buf[0] != 0x01u) {
-        return false;
-    }
+    // only type 1 is accepted for now
+    return type == 0x01;
+}
 
+bool validate_crc(const uint8_t *buf)
+{
     uint16_t crc_calc = crc16_ccitt(buf, FRAME_1_PAYLOAD_LEN - 2u);
     uint16_t crc_recv = (uint16_t)buf[8] | ((uint16_t)buf[9] << 8);
-    if (crc_calc != crc_recv) {
-        return false;
+    const bool crc_valid = crc_calc == crc_recv;
+    if(!crc_valid)
+    {
+        error_set(ERROR_SENSOR_FRAME_CRC_INVALID);
     }
+    return crc_valid;
+}
 
+void parse_sensor_frame(const uint8_t *buf, sensor_data_t *out)
+{
     memcpy(&out->temperature, (const void *)(buf + 1), sizeof(float));
     out->humidity = (float)buf[5];
     out->iaq      = (uint16_t)buf[6] | ((uint16_t)buf[7] << 8);
     out->valid    = true;
-
-    return true;
 }

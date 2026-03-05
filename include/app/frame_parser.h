@@ -37,8 +37,23 @@ uint16_t crc16_ccitt(const uint8_t *data, size_t len);
  *
  * @param buf  Raw frame bytes (exactly FRAME_1_PAYLOAD_LEN bytes).
  * @param out  Output structure populated on success.
- * @return     true if type == 0x01 and CRC matches, false otherwise.
  */
-bool parse_sensor_frame(const uint8_t *buf, sensor_data_t *out);
+void parse_sensor_frame(const uint8_t *buf, sensor_data_t *out);
+
+/**
+ * @brief validate frame type
+ *
+ * @param type  frame type
+ * @return     true if type == 0x01, false otherwise.
+ */
+bool validate_type(uint8_t type);
+
+/**
+ * @brief validate frame crc
+ *
+ * @param buf  Raw frame bytes (exactly FRAME_1_PAYLOAD_LEN bytes).
+ * @return     true on crc success, false otherwise
+ */
+bool validate_crc(const uint8_t *buf);
 
 #endif /* FRAME_PARSER_H */

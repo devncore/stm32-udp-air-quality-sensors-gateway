@@ -22,6 +22,7 @@
 #include "app/display.h"
 #include "app/uart_rx.h"
 #include "drivers/esp8266/esp8266.h"
+#include "toolbox/assert.h"
 
 #include "cmsis_os.h"
 #include "queue.h"
@@ -50,10 +51,10 @@ static display_task_config_t g_display_cfg;
  *============================================================================*/
 
 #define SENSOR_QUEUE_LENGTH 8U
-static uint8_t       g_sensor_queue_storage[SENSOR_QUEUE_LENGTH * sizeof(sensor_data_t)];
-static StaticQueue_t g_sensor_queue_struct;
-static QueueHandle_t g_sensor_queue;
-static MessageBufferHandle_t g_msg_buffer;
+static uint8_t       g_sensor_data_for_display_queue_storage[SENSOR_QUEUE_LENGTH * sizeof(sensor_data_t)];
+static StaticQueue_t g_sensor_data_for_display_queue_struct;
+static QueueHandle_t g_sensor_data_for_display_queue;
+static MessageBufferHandle_t g_raw_data_buffer;
 
 /*============================================================================
  * Application entry point
@@ -61,16 +62,23 @@ static MessageBufferHandle_t g_msg_buffer;
 
 void app_main(void)
 {
-    /* HAL and peripherals are already initialised by CubeMX main() */
+    /* NB: HAL and peripherals are already initialised by CubeMX main() */
+
+    /* --------------------------------------------------------------------- */
+    /* --------------- Initialize shared data and components --------------- */
+    /* --------------------------------------------------------------------- */
 
     /* affect shared queue/buffer */
-    g_sensor_queue = xQueueCreateStatic(SENSOR_QUEUE_LENGTH, sizeof(sensor_data_t),
-                                        g_sensor_queue_storage, &g_sensor_queue_struct);
-    g_msg_buffer = xMessageBufferCreate(RTOS_MESSAGE_BUFFER_LEN);
+    g_raw_data_buffer = xMessageBufferCreate(RTOS_MESSAGE_BUFFER_LEN);
+    g_sensor_data_for_display_queue = xQueueCreateStatic(SENSOR_QUEUE_LENGTH, sizeof(sensor_data_t),
+                                        g_sensor_data_for_display_queue_storage, &g_sensor_data_for_display_queue_struct);
+    ASSERT(g_raw_data_buffer!=NULL, "g_raw_data_buffer is NULL");
+    ASSERT(g_sensor_data_for_display_queue!=NULL, "g_sensor_data_for_display_queue is NULL");
 
     /* initialization of uart */
     g_uart = stm32_uart_init(&huart2);
-    uart_rx_init(&huart2, g_msg_buffer);
+    ASSERT(g_uart!=NULL, "g_uart is NULL");
+    uart_rx_init(&huart2, g_raw_data_buffer);
 
     /* external components intizialisation */
     esp8266_create(&g_esp8266, g_uart);
@@ -82,8 +90,8 @@ void app_main(void)
 
     /* Create Network Task (high priority) */
     g_network_cfg.esp          = &g_esp8266;
-    g_network_cfg.msg_buf      = g_msg_buffer;
-    g_network_cfg.sensor_queue = g_sensor_queue;
+    g_network_cfg.msg_buf      = g_raw_data_buffer;
+    g_network_cfg.sensor_queue = g_sensor_data_for_display_queue;
     const osThreadAttr_t network_attr = {
         .name       = "networkTask",
         .stack_size = CONFIG_NETWORK_TASK_STACK_SIZE * 4,
@@ -92,7 +100,7 @@ void app_main(void)
     osThreadNew(network_task, &g_network_cfg, &network_attr);
 
     /* Create Display Task (low priority) */
-    g_display_cfg.sensor_queue = g_sensor_queue;
+    g_display_cfg.sensor_queue = g_sensor_data_for_display_queue;
     const osThreadAttr_t display_attr = {
         .name       = "displayTask",
         .stack_size = CONFIG_DISPLAY_TASK_STACK_SIZE * 4,

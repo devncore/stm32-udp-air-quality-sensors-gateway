@@ -1,5 +1,36 @@
 # Air Quality Server
 
+```
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │                        AIR QUALITY MONITORING SYSTEM                        │
+  └─────────────────────────────────────────────────────────────────────────────┘
+
+   SENSOR NODES                           SERVER                      OUTPUTS
+  ══════════════                    ══════════════════             ══════════════
+
+  ┌──────────┐                      ┌───────────────┐
+  │ Sensor 1 │  ~~~ UDP/WiFi ~~~>   │               │             ┌────────────┐
+  │  Room A  │                      │  ESP-01S      │  ─── SPI ──>│   OLED     │
+  └──────────┘                      │  WiFi module  │             │  128×128   │
+                                    │               │             │            │
+  ┌──────────┐                      │  ┌─────────┐  │             │ ┌──┬──┬──┬──┐│
+  │ Sensor 2 │  ~~~ UDP/WiFi ~~~>   │  │  UART2  │  │             │ │R1│R2│R3│R4││
+  │  Room B  │                      │  └────┬────┘  │             │ │23│21│25│19││
+  └──────────┘                      │       │       │             │ │48│55│40│62││
+                                    │  ┌────▼────┐  │             │ │GD│PF│MD│VG││
+  ┌──────────┐                      │  │  STM32  │  │             │ └──┴──┴──┴──┘│
+  │ Sensor 3 │  ~~~ UDP/WiFi ~~~>   │  │F401RET6 │  │             └────────────┘
+  │  Room C  │                      │  │         │  │
+  └──────────┘                      │  │FreeRTOS │  │             ┌────────────┐
+                                    │  │         │  │             │  !! ALARM  │
+  ┌──────────┐                      │  └─────────┘  │  ─ future ─>│  (thresh.) │
+  │ Sensor 4 │  ~~~ UDP/WiFi ~~~>   │               │             │            │
+  │  Room D  │                      └───────────────┘             └────────────┘
+  └──────────┘
+      │
+      └─ 10-byte binary frame: [ type | temp(float) | hum | IAQ | CRC16 ]
+```
+
 Embedded firmware for a centralized air quality monitoring station. The device receives sensor data from multiple wireless sensor nodes over UDP and displays temperature, humidity, and air quality index for up to 4 rooms on a local OLED screen.
 
 ---
@@ -13,7 +44,6 @@ Embedded firmware for a centralized air quality monitoring station. The device r
 - **Alert indication** — inverse-video blinking when air quality exceeds threshold
 - **Brokerless architecture** — sensors push UDP frames directly to the server, no MQTT broker needed
 - **Frame integrity** — CRC16-CCITT validation on every received binary frame
-- **Low cost** — ~$22 USD total BOM (MCU $13, WiFi $3, Display $6)
 
 ---
 

@@ -281,7 +281,7 @@ void display_task(void *argument)
     static bool room_drawn[SENSOR_MAX_ROOMS] = {false};
     for (;;) {
         sensor_data_t data;
-        const osStatus_t queue_status = osMessageQueueGet(cfg->sensor_queue, &data, NULL, DISPLAY_TASK_TIMEOUT_TICKS);
+        const osStatus_t queue_status = xQueueReceive(cfg->sensor_queue, &data, DISPLAY_TASK_TIMEOUT_TICKS);
 
          // update sensor timestamps and evaluate wether any timeout
          uint8_t index_of_timeout = displayed_sensor_evaluate_timeout();

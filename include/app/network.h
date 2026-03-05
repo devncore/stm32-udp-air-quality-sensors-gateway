@@ -10,7 +10,7 @@
 #ifndef APP_NETWORK_H
 #define APP_NETWORK_H
 
-#include "FreeRTOS.h"          /* must precede FreeRTOS headers */
+#include "FreeRTOS.h"
 #include "message_buffer.h"
 #include "queue.h"
 #include "drivers/esp8266/esp8266.h"
@@ -40,7 +40,7 @@ typedef struct {
  *
  * Phase 1 (blocking UART): initialises ESP8266, connects WiFi, opens UDP.
  * Phase 2 (interrupt UART): switches to ISR-driven reception and posts
- * decoded sensor frames to g_sensor_queue for the display task.
+ * decoded sensor frames to g_sensor_data_for_display_queue for the display task.
  *
  * @param argument  Pointer to a network_task_config_t (must not be NULL).
  *                  The pointed-to struct must remain valid for the task lifetime.

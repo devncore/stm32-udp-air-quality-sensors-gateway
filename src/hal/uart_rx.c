@@ -15,6 +15,7 @@
 
 #include "message_buffer.h"
 #include "projdefs.h"
+#include "app/error_manager.h"
 
 /*============================================================================
  * Diagnostics
@@ -109,6 +110,7 @@ static void rx_process_byte(uint8_t byte)
                 s_rx.msg_buf, s_rx.payload_buf, FRAME_1_PAYLOAD_LEN, &woken);
             if (sent == 0U) {
                 uart_rx_overflow_count++;
+                error_set_from_isr(ERROR_MESSAGE_BUFFER_OVERFLOW);
             }
             s_rx.state = RX_STATE_IDLE;
             portYIELD_FROM_ISR(woken);
