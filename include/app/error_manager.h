@@ -27,14 +27,23 @@
  * @note Maximum 32 entries (uint32_t bitfield).
  */
 typedef enum {
-    ERROR_MESSAGE_BUFFER_OVERFLOW = 0,  /* byte message buffer overflow */
-    ERROR_SENSOR_FRAME_CRC_INVALID,     /* CRC has been wrong several times */
-    ERROR_SENSOR_QUEUE_PUT_FAILED,      /* Error while trying to add a queue message (see network.c) */
-    ERROR_ESP8266_INIT_FAILED,       
-    ERROR_WIFI_CONNECT_TIMEOUT, 
-    ERROR_UDP_START_FAILED,
+    /* -- Boot / reset cause (recorded once at startup) --------------------- */
+    ERROR_RESET_WATCHDOG_TIMEOUT = 0, /**< IWDG fired: a task starved the watchdog */
+    ERROR_RESET_OTHER,                /**< Unexpected reset: BOR, software reset, WWDG, or low-power reset */
 
-    ERROR_COUNT              /**< Sentinel — must remain last */
+    /* -- Initialisation failures ------------------------------------------- */
+    ERROR_ESP8266_INIT_FAILED,        /**< ESP8266 did not respond or failed AT handshake at boot */
+
+    /* -- Runtime: network / connectivity ----------------------------------- */
+    ERROR_WIFI_CONNECT_TIMEOUT,       /**< Wi-Fi association or DHCP timed out */
+    ERROR_UDP_START_FAILED,           /**< Could not open or bind the UDP socket */
+
+    /* -- Runtime: sensor data ---------------------------------------------- */
+    ERROR_MESSAGE_BUFFER_OVERFLOW,    /**< Raw UART message buffer overflowed; bytes were dropped */
+    ERROR_SENSOR_FRAME_CRC_INVALID,   /**< Sensor frame CRC mismatch exceeded the retry threshold */
+    ERROR_SENSOR_QUEUE_PUT_FAILED,    /**< Parsed sensor_data_t could not be enqueued for display */
+
+    ERROR_COUNT                       /**< Sentinel — must remain last */
 } error_id_t;
 
 /*============================================================================

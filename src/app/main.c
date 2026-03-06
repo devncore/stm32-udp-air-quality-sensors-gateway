@@ -22,12 +22,15 @@
 #include "app/display.h"
 #include "app/uart_rx.h"
 #include "app/watchdog.h"
+#include "app/reset.h"
+#include "app/error_manager.h"
 #include "drivers/esp8266/esp8266.h"
 #include "toolbox/assert.h"
 
 #include "cmsis_os.h"
 #include "queue.h"
 #include "main.h"
+
 
 /* External HAL handles (defined in CubeMX-generated code) */
 extern UART_HandleTypeDef huart2;
@@ -64,6 +67,17 @@ static MessageBufferHandle_t g_raw_data_buffer;
 void app_main(void)
 {
     /* NB: HAL and peripherals are already initialised by CubeMX main() */
+
+    /* --------------------------------------------------------------------- */
+    /* --------------- Check last reset cause -------------------------------- */
+    /* --------------------------------------------------------------------- */
+
+    const reset_cause_t reset_cause = get_reset_cause();
+    if (reset_cause == RESET_CAUSE_WATCHDOG) {
+        error_set(ERROR_RESET_WATCHDOG_TIMEOUT);
+    } else if (reset_cause == RESET_CAUSE_OTHER) {
+        error_set(ERROR_RESET_OTHER);
+    }
 
     /* --------------------------------------------------------------------- */
     /* --------------- Initialize shared data and components --------------- */
